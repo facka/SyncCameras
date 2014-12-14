@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+	<title>SyncCamera</title>
+	<meta charset="utf-8" />
+	<link rel="stylesheet" href="http://code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css" />
+	<script src="http://code.jquery.com/jquery-1.9.1.js"></script>
+	<script src="http://code.jquery.com/ui/1.10.2/jquery-ui.js"></script>
+	<script src="/socket.io/socket.io.js"></script>
+	<script>
+	
+	var canvas, context;	
+	// Put event listeners into place
+	window.addEventListener("DOMContentLoaded", function() {
+		// Grab elements, create settings, etc.
+		canvas = document.getElementById("canvas"),
+		context = canvas.getContext("2d"),
+		video = document.getElementById("video"),
+		videoObj = { "video": true },
+		errBack = function(error) {
+			console.log("Video capture error: ", error.code); 
+		};
+
+		// Put video listeners into place
+		if(navigator.getUserMedia) { // Standard
+			log("novigator has userMedia standard");
+			navigator.getUserMedia(videoObj, function(stream) {
+				video.src = stream;
+				video.play();
+			}, errBack);
+		} else if(navigator.webkitGetUserMedia) { // WebKit-prefixed
+			log("novigator has webkit userMedia");
+			navigator.webkitGetUserMedia(videoObj, function(stream){
+				video.src = window.webkitURL.createObjectURL(stream);
+				video.play();
+			}, errBack);
+		}
+	}, false);	
+	
+	//////////////////////////////mobile/////////////////////////////////////
+	/*$(document).ready(function(){
+		navigator.camera.getPicture(onSuccess, onFail, { quality: 50}); 
+
+		function onSuccess(imageData) {
+			var image = document.getElementById('myImage');
+			image.src = "data:image/jpeg;base64," + imageData;
+		}
+
+		function onFail(message) {
+			alert('Failed because: ' + message);
+		}
+	});
+	*/
+	/////////////////////////////////////////////////////////////////////////
+			
+	//socket = io.connect('http://localhost/');
+	socket = io.connect('http://192.168.1.5/');
+	
+	var id;
+	
+	var takePicture = function() {
+		context.drawImage(video, 0, 0, 320, 240);
+		console.log("Picture taked!");
+		log("Picture taked!");
+		//socket.emit("sendPicture", {'id' : id , 'picture': context.getImageData(0,0,640,480)});
+		socket.emit("sendPicture", {'id' : id , 'picture': canvas.toDataURL()});
+	};
+	
+	$(document).ready(function(){
+		
+		socket.on("takePicture", takePicture);
+		
+		socket.on("id", function(_id){
+			id = _id;
+			$("#id").text("Camera id: "+id);
+		});
+	});
+	
+	var log = function(message) {
+		var text = $('#log').text();
+		$('#log').text(text+' --- '+message);
+	};
+	
+	</script>
+</head>
+<body>
+	<video id="video" width="320" height="240" autoplay></video>
+	<div id="id"></div>
+	<div id='log'>CONSOLA DE LOGS</div>
+	<canvas id="canvas" width="320" height="240"></canvas>
+</body>
+</html>
+
