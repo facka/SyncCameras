@@ -6,50 +6,57 @@
 	<link rel="stylesheet" href="http://code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css" />
 	<script src="http://code.jquery.com/jquery-1.9.1.js"></script>
 	<script src="http://code.jquery.com/ui/1.10.2/jquery-ui.js"></script>
-	<script src="/socket.io/socket.io.js"></script>
-	<script>	
-		
+	<script src="/js/socket.io.js"></script>
+	<script>
+
 	pictures = {};
 	count = 0;
 	index = 0;
-	//socket = io.connect('http://localhost/');
-	socket = io.connect('http://192.168.1.5/');
-	
+	var socketUrl;
+	if (window.location.hostname === 'localhost' || window.location.hostname === '192.168.0.13')  {
+		socketUrl = 'http://192.168.0.13:8000/';
+	}
+	else {
+		socketUrl = 'http://synccams.mybluemix.net/';
+	}
+	socket = io.connect(socketUrl);
+	//socket = io.connect('http://192.168.0.13/');
+
 	var addPicture = function(pictureData) {
 		var imgData = pictureData.picture;
 		pictures[pictureData.id] = imgData;
 		count++;
-		console.log("ädded picture! count = "+ count);
-		log("ädded picture! count = "+ count);
+		console.log("added picture! count = "+ count);
+		log("added picture! count = "+ count);
 		updatePicture();
 	};
-	
+
 	var updatePicture = function() {
 		console.log("Image updated! index = "+ index);
 		log("Image updated! index = "+ index);
 		//context.putImageData(pictures[index+""], 0, 0, 640, 480);
-		var img = new Image;
+		var img = new Image();
 		img.onload = function(){
 			context.drawImage(img,0,0); // Or at whatever offset you like
 		};
 		img.src = pictures[index+""];
 		//context.drawImage(pictures[index+""], 0, 0, 320, 240);
-	};	
-	
+	};
+
 	var log = function(message) {
 		var text = $('#log').text();
 		$('#log').text(text+' --- '+message);
 	};
-	
+
 	$(document).ready(function(){
 		canvas = document.getElementById("canvas");
 		context = canvas.getContext("2d");
-	
+
 		$("#snap").click(function() {
 				socket.emit("takePictures", "");
 				log("hey! take pictures now!!!");
 		});
-		
+
 		$("#left").click(function() {
 			if (index > 0){
 				index--;
@@ -57,7 +64,7 @@
 				updatePicture();
 			}
 		});
-		
+
 		$("#right").click(function() {
 			if (index < count){
 				index++;
@@ -65,20 +72,20 @@
 				updatePicture();
 			}
 		});
-		
+
 		$("#refresh").click(function() {
 			socket.emit("refreshServer","");
 		});
-		
+
 		socket.on("receivedPicture", addPicture);
-		
+
 		socket.on("sendRegisteredsCams", function(countCameras) {
 			var text = "Connected Cameras: /n";
 			for (var i = 0 ; i < countCameras; i++) {
 				text +=  "camera"+ i + "/n";
 			}
 			$("#camsConnectedContainer").text(text);
-		}); 	
+		});
 	});
 	</script>
 </head>

@@ -1,0 +1,12 @@
+applications:
+- path: .
+  memory: 512M
+  instances: 1
+  domain: mybluemix.net
+  name: SyncCams
+  host: SyncCams
+  disk_quota: 1024M
+  services:
+  - SyncCams-DataCache
+  - SyncCams-MonitoringAndAnalytics
+  command: node app.js

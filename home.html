@@ -1,0 +1,577 @@
+<!---
+TODO:
+ - Add cloudinary to store pictures
+ - Add analytics (DONE)
+ - Show 3,2,1 Smile!
+ - Fix image size
+
+-->
+
+<!doctype html>
+<html lang="en" ng-app="SyncCamsApp">
+<head>
+    <title>SyncCamera</title>
+    <link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/angular_material/0.9.4/angular-material.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=RobotoDraft:300,400,500,700,400italic">
+
+<!-- This lines commented due to error in Chrome in Android
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, minimum-scale=1, maximum-scale=1, user-scalable=0">-->
+
+    <script src="/js/jquery-1.9.1.min.js"></script>
+    <script src="/js/socket.io.js"></script>
+    <script src="/js/qrcode.js"></script>
+    <script src="/js/html5-qrcode.min.js"></script>
+
+    <script id="logger" src="http://192.168.1.7:3003/console-log.js"></script>
+
+    <style type="text/css">
+
+        body {
+            overflow: hidden;
+            background-color: black;
+        }
+
+        h1 {
+            color: white;
+            z-index: 1000;
+            text-shadow: 2px 2px 6px rgba(0, 0, 0, 1);
+        }
+
+        h2 {
+            color: white;
+            z-index: 1000;
+            text-shadow: 2px 2px 6px rgba(0, 0, 0, 1);
+            font-size: 1rem;
+            margin: 10px 0;
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            max-height: 100%;
+            position: absolute;
+            z-index: 0;
+        }
+
+        .qr-code {
+            z-index: 1;
+            padding: 15px;
+            background-color: white;
+            margin-top: 25px;
+        }
+
+        .fullsize {
+            width: 100%;
+            height: 100%;
+            max-width: 960px;
+        }
+
+        .menu-btn {
+            bottom: 10px;
+            position: absolute;
+            right: 10px;
+        }
+
+        .close-btn {
+            top: 10px;
+            position: absolute;
+            right: 10px;
+        }
+
+        .flash {
+            width: 100%;
+            height: 100%;
+            max-height: 100%;
+            position: absolute;
+            background-color: white;
+            z-index: 1000;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .qr-reader-box {
+            position: absolute;
+            width: 80%;
+            height: 80%;
+            top: 5%;
+            left: 10%;
+            z-index: 1;
+            opacity: 0.3;
+        }
+
+        .cams-connected-label {
+            bottom: 10px;
+            position: absolute;
+            left: 10px;
+        }
+
+        a.md-button.md-default-theme.md-fab, .md-button.md-default-theme.md-fab {
+            border-radius: 50%;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: rgb(255,255,255);
+        }
+
+        .roomname-label {
+          color: white!important;
+          z-index: 1000;
+          text-shadow: 2px 2px 6px rgba(0, 0, 0, 1);
+          text-align: center;
+          margin: 10px 0px;
+          height: 15px;
+        }
+
+    </style>
+
+</head>
+<body layout="column" ng-controller="AppCtrl">
+    <div ng-show="!viewer">
+        <audio id="audio" src="http://www.soundjay.com/button/beep-07.wav" preload="auto" controls="false" autostart="false" class="hidden"></audio>
+        <video id="video" autoplay></video>
+        <div id="flash" class="hidden"></div>
+        <canvas id="canvas" class="hidden" width="400" height="600"></canvas>
+        <div ng-if="mainView">
+            <div layout="row" layout-align="center center">
+                <h1>Synchronized Cams!</h1>
+            </div>
+            <div layout="row" layout-align="space-around center">
+                <div></div>
+                <div layout="column" layout-align="space-around center" style="width: 180px; height:180px;">
+                    <md-button class="md-raised md-primary" ng-click="startSyncCam()">Start now!</md-button>
+                    <div layout="row" layout-align="center center">
+
+                        <md-input-container style="padding: 0px;">
+                          <h2 ng-show="showLabel" ng-click="enableInput()">
+                              Choose a name
+                          </h2>
+                          <label ng-show="!showLabel" ></label>
+                          <input ng-show="!showLabel" id="roomId" class="roomname-label" ng-model="$parent.roomId" placeholder="Write a funny name here" aria-label="room name" ng-keyup="onKeyUp($event)">
+                        </md-input-container>
+                    </div>
+                </div>
+                <h1>Or</h1>
+                <div layout="column" layout-align="space-around center" style="width: 180px; height:180px;">
+                    <md-button class="md-raised md-primary" ng-click="startQRScan()">Connect to other cam</md-button>
+                    <h2>
+                        Actives QR scanner
+                    </h2>
+                </div>
+                <div></div>
+            </div>
+        </div>
+        <div ng-if="readingQR">
+            <div layout="row" layout-align="space-around center">
+                <h1>Scanning QR...</h1>
+            </div>
+            <md-button ng-click="cancelQRScan()" class="close-btn md-fab" aria-label="Close">
+                <md-icon md-svg-src="img/clear.svg"></md-icon>
+            </md-button>
+            <img src="img/box.svg" class="qr-reader-box">
+        </div>
+        <div layout="row" layout-align="space-around center">
+            <md-button ng-if="showShootButton" class="md-fab" aria-label="Menu">
+                <md-icon md-svg-src="img/menu.svg"></md-icon>
+            </md-button>
+            <md-button ng-if="showShootButton" class="md-fab" aria-label="Shoot" ng-click="takePicture()">
+                <md-icon md-svg-src="img/camera.svg"></md-icon>
+            </md-button>
+            <md-button ng-if="showShootButton" class="md-fab" aria-label="Share" ng-click="openQRCode()">
+                <md-icon md-svg-src="img/share.svg"></md-icon>
+            </md-button>
+        </div>
+        <div layout="row" layout-align="center center">
+            <qr ng-if="showQRCode" text="qrcodedURL" size="400" class="qr-code" ng-click="openQRCode()"></qr>
+        </div>
+        <h2 ng-if="showShootButton" class="cams-connected-label">{{camerasCount}}</h2>
+        <md-button ng-if="showShootButton" aria-label="menu" class="menu-btn md-primary" ng-click="openMenu()">
+            <md-icon md-svg-src="img/menu.svg"></md-icon>
+        </md-button>
+    </div>
+    <div layout="row" ng-if="loading" layout-align="center center">
+        <md-progress-circular md-mode="indeterminate"></md-progress-circular>
+    </div>
+    <div ng-show="viewer">
+        <!--<canvas id="canvasViewer" class="fullsize"></canvas>-->
+        <img class="fullsize" ng-if="imageURL" ng-src="{{imageURL}}"/>
+        <md-button ng-if="showShootButton" aria-label="menu" class="menu-btn md-primary" ng-click="openMenu()">
+            <md-icon md-svg-src="img/menu.svg"></md-icon>
+        </md-button>
+    </div>
+
+    <script>
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-68545177-1', 'auto');
+      ga('send', 'pageview');
+
+    </script>
+
+    <!-- Angular Material Dependencies -->
+
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.15/angular.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.15/angular-animate.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.15/angular-aria.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angular_material/0.9.4/angular-material.min.js"></script>
+    <script src="/js/angular-qr.js"></script>
+
+    <script type="text/javascript">
+
+        var app = angular.module('SyncCamsApp', ['ngMaterial', 'ja.qr']);
+
+        app.run(function($templateCache) {
+          $templateCache.put('menu.html', '<md-bottom-sheet class="md-list md-has-header" ng-cloak><md-subheader>Menu</md-subheader><md-list><md-list-item ng-repeat="item in items"><md-button ng-click="listItemClick($index)" md-autofocus="$index == 2" class="md-list-item-content" ><md-icon md-svg-src="{{item.icon}}"></md-icon><span class="md-inline-list-icon-label">{{ item.name }}</span></md-button></md-list-item></md-list></md-bottom-sheet>');
+        });
+
+        app.config(function($locationProvider, $mdThemingProvider) {
+            $locationProvider.html5Mode({
+              enabled: true,
+              requireBase: false
+            });
+            $mdThemingProvider.theme('default')
+                .primaryPalette('blue-grey')
+                .accentPalette('blue-grey');
+        });
+
+        app.controller('MenuCtrl', ['$scope', '$mdBottomSheet', function($scope, $mdBottomSheet) {
+            $scope.items = [
+                { name: 'Share', icon: 'img/share.svg' },
+                { name: 'Back', icon: 'img/clear.svg' }
+            ];
+            $scope.listItemClick = function($index) {
+                var clickedItem = $scope.items[$index];
+                $mdBottomSheet.hide(clickedItem);
+            };
+        }]);
+
+        app.controller('AppCtrl', ['$scope', '$mdSidenav', '$location', '$mdBottomSheet',function($scope, $mdSidenav, $location, $mdBottomSheet) {
+
+            $scope.viewer = false;
+            var flash = document.getElementById("flash");
+            var canvas = document.getElementById("canvas");
+            var context = canvas.getContext("2d");
+            var video = document.getElementById("video");
+            var audio = document.getElementById("audio");
+            //var canvasViewer = document.getElementById("canvasViewer");
+            //var contextViewer = canvasViewer.getContext("2d");
+
+            function createSocket(roomId) {
+                var socketUrl;
+                if (window.location.hostname === 'localhost' || window.location.hostname === '192.168.1.7')  {
+                    socketUrl = 'http://192.168.1.7:8000/';
+                }
+                else {
+                    socketUrl = 'http://synccams.mybluemix.net/';
+                }
+                socket = io(socketUrl, {forceNew: true});
+
+                socket.on("admin", function(){
+                    $scope.showShootButton = true;
+                    $scope.$apply();
+                    $scope.takePicture = function() {
+                        socket.emit('takePictures', roomId);
+                    };
+                });
+
+                $scope.camerasCount = 'No cams connected';
+
+                socket.on("camerasCount", function(number){
+                    if (number > 1) {
+                        $scope.camerasCount = number + ' cams connected';
+                    }
+                    else {
+                        $scope.camerasCount = 'No cams connected';
+                    }
+                    $scope.$apply();
+                });
+
+                socket.on("takePicture", function takePicture() {
+                    context.drawImage(video, 0, 0);//, $scope.size.width/*320*/, $scope.size.height /*240*/);
+                    flash.setAttribute('class', 'flash');
+                    setTimeout(function() {
+                        flash.setAttribute('class', 'hidden');
+                    },400);
+                    video.pause();
+                    setTimeout(function() {
+                        video.play();
+                    },1000);
+
+                    console.log("Picture taked!");
+                    socket.emit("sendPicture", {
+                        'roomId' : roomId ,
+                        'picture': canvas.toDataURL()
+                    });
+                    $scope.loading = true;
+                });
+
+                socket.on("pictures", function(pictures){
+                    console.log('pictures: ', pictures);
+                    $scope.pictures = pictures;
+                    $scope.viewer = true;
+
+                    function refreshImage(index) {
+                        var img = new Image();
+                        img.onload = function(){
+                            contextViewer.drawImage(img,0,0);
+                            $scope.loading = false;
+                            $scope.$apply();
+                        };
+                        img.src = $scope.pictures[index].picture;
+                    }
+                    var index = 0;
+                    setInterval(function() {
+                        refreshImage(index % $scope.pictures.length);
+                        index++;
+                    }, 2000);
+
+                    $scope.$apply();
+                });
+
+
+                socket.on("picturesURLs", function(picturesURLs){
+                    console.log('pictures: ', picturesURLs);
+                    $scope.picturesURLs = picturesURLs;
+                    $scope.viewer = true;
+                    $scope.imageURL = null;
+                    var index = 0;
+                    $scope.loading = false;
+                    setInterval(function() {
+                        $scope.imageURL = $scope.picturesURLs[index % $scope.picturesURLs.length];
+                        index++;
+                        $scope.$apply();
+                    }, 2000);
+
+                });
+
+                socket.emit('createRoom', roomId);
+
+            }
+
+            if ($location.url() === '/') {
+                $scope.mainView = true;
+            }
+            else {
+                $scope.mainView = false;
+                var id = $location.url().substring(1, $location.url().length);
+                createSocket(id);
+            }
+
+            $scope.showPlaceholder = function() {
+                if (!$scope.roomId) {
+                    $scope.roomIdLabel = 'Or create your own room';
+                }
+            };
+
+            $scope.showLabel = function() {
+                $scope.roomIdLabel = 'Room name:';
+            };
+
+            $scope.enableInput = function(){
+              $scope.showLabel = false;
+              var input = window.document.getElementById('roomId');
+              setTimeout(function () {
+                input.focus();
+              }, 10);
+            }
+
+            $scope.onKeyUp = function(event) {
+              if (event.which === 13) {
+                $scope.startSyncCam();
+              }
+              if (event.which === 27) {
+                $scope.showLabel = true;
+                $scope.roomId = '';
+              }
+            };
+
+            $scope.showPlaceholder();
+
+            $scope.startSyncCam = function() {
+
+                $scope.mainView = false;
+
+                var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                var id = '';
+                for (var i = 0; i < 8; i++) {
+                    id += chars[Math.floor((Math.random() * 36))];
+                }
+
+                if ($scope.roomId) {
+                    id = $scope.roomId;
+                }
+
+                createSocket(id);
+
+                $location.path('/' + id);
+            };
+
+            $scope.showQRCode = false;
+            $scope.qrcodedURL = $location.url();
+
+            $scope.openQRCode = function() {
+                $scope.showQRCode = !$scope.showQRCode;
+                $scope.qrcodedURL = $location.url();
+            };
+
+            $scope.startQRScan = function() {
+                $scope.readingQR = true;
+                $scope.mainView = false;
+                scan();
+            };
+
+            $scope.cancelQRScan = function() {
+                $scope.readingQR = false;
+                $scope.mainView = true;
+                clearTimeout(QRScanKiller);
+            };
+
+            $scope.openMenu = function($event) {
+                $mdBottomSheet.show({
+                  templateUrl: 'menu.html',
+                  controller: 'MenuCtrl',
+                  targetEvent: $event
+                }).then(function(clickedItem) {
+                  console.log(clickedItem.name + ' clicked!');
+                  if (clickedItem.name === 'Back') {
+                    window.location.href = '/';
+                  }
+                  if (clickedItem.name === 'Share') {
+
+                  }
+                });
+            };
+
+            function loadUserMedia() {
+                return navigator.getUserMedia || navigator.webkitGetUserMedia ||
+                    navigator.mozGetUserMedia || navigator.msGetUserMedia;
+            }
+
+            var userMedia = loadUserMedia();
+
+            if (userMedia) {
+                var videoObj = { "video": true };
+
+                var vgaConstraints = {
+                  video: {
+                    mandatory: {
+                      maxWidth: window.innerWidth,
+                      maxHeight: window.innerHeight
+                    }
+                  }
+                };
+
+                videoObj = vgaConstraints;
+
+                var errBack = function(error) {
+                    var details = '';
+                    for (var key in error) {
+                        details+= key + ':' + error[key] + ', ';
+                    }
+                    console.log("Video capture error: ", details);
+                };
+
+                // Put video listeners into place
+                window.addEventListener("DOMContentLoaded", function() {
+                    if(navigator.getUserMedia) { // Standard
+                        navigator.getUserMedia(videoObj, function(stream) {
+                            video.src = stream;
+                            localMediaStream = stream;
+                            video.play();
+                        }, errBack);
+                    } else if(navigator.webkitGetUserMedia) { // WebKit-prefixed
+                        navigator.webkitGetUserMedia(videoObj, function(stream){
+                            console.log('is webkit!');
+                            video.src = window.webkitURL.createObjectURL(stream);
+                            localMediaStream = stream;
+                            console.log( video ? 'hay video' : 'video NULL');
+                            video.play();
+                        }, errBack);
+                    } else if(navigator.mozGetUserMedia) { // WebKit-prefixed
+                        navigator.mozGetUserMedia(videoObj, function(stream){
+                            video.src = window.URL.createObjectURL(stream);
+                            localMediaStream = stream;
+                            video.play();
+                        }, errBack);
+                    }
+                });
+            }
+            else {
+                console.log("No user media");
+            }
+
+            var localMediaStream;
+            var QRScanKiller;
+
+            var scan = function() {
+                if (localMediaStream) {
+                    context.drawImage(video, 0, 0, 307, 250);
+
+                    try {
+                        qrcode.decode();
+                    } catch (e) {
+                        console.log(e);
+                    }
+
+                    QRScanKiller = setTimeout(scan, 500);
+
+                } else {
+                    QRScanKiller = setTimeout(scan, 500);
+                }
+            };//end snapshot function
+
+            qrcode.canvas = canvas;
+
+            qrcode.callback = function (sharedUrl) {
+                $scope.mainView = false;
+                var id = sharedUrl.substring(1, sharedUrl.length);
+                createSocket(id);
+                $location.path('/' + id);
+                $scope.readingQR = false;
+                $scope.mainView = false;
+                audio.play();
+                clearTimeout(QRScanKiller);
+            };
+
+            function refresh(orientation) {
+
+                if ('landscape') {
+                    $scope.size = {
+                        width: 600,
+                        height: 400
+                    };
+                }
+                else {
+                    $scope.size = {
+                        width: 400,
+                        height: 600
+                    };
+                }
+
+            }
+
+            function doOnOrientationChange() {
+                switch (window.orientation) {
+                  case -90:
+                  case 90:
+                    refresh('landscape');
+                    break;
+                  default:
+                    refresh('portrait');
+                    break;
+                }
+            }
+
+            window.addEventListener('orientationchange', doOnOrientationChange);
+
+            // Initial execution if needed
+            doOnOrientationChange();
+
+        }]);
+
+    </script>
+  </body>
+</html>

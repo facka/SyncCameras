@@ -1,0 +1,158 @@
+<!doctype html>
+<html>
+<head>
+    <title>SyncCamera</title>
+    <link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/angular_material/0.9.4/angular-material.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=RobotoDraft:300,400,500,700,400italic">
+
+    <script src="/js/socket.io.js"></script>
+
+    <style type="text/css">
+
+        body {
+            overflow: hidden;
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            max-height: 100%;
+            position: absolute;
+        }
+
+        .fullsize {
+            width: 100%;
+            height: 100%;
+        }
+
+        .flash {
+            width: 100%;
+            height: 100%;
+            max-height: 100%;
+            position: absolute;
+            background-color: white;
+            z-index: 1000;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+
+    <script>
+
+    function loadUserMedia() {
+        return navigator.getUserMedia || navigator.webkitGetUserMedia ||
+            navigator.mozGetUserMedia || navigator.msGetUserMedia;
+    }
+
+    var userMedia = loadUserMedia();
+
+    if (userMedia) {
+        var canvas, context;
+        // Put event listeners into place
+        window.addEventListener("DOMContentLoaded", function() {
+            // Grab elements, create settings, etc.
+            canvas = document.getElementById("canvas");
+            context = canvas.getContext("2d");
+
+            var video = document.getElementById("video");
+            var videoObj = { "video": true };
+
+            var vgaConstraints = {
+              video: {
+                mandatory: {
+                  maxWidth: window.innerWidth,
+                  maxHeight: window.innerHeight
+                }
+              }
+            };
+
+            videoObj = vgaConstraints;
+
+            var errBack = function(error) {
+                var details = '';
+                for (var key in error) {
+                    details+= key + ':' + error[key] + ', ';
+                }
+            };
+
+            // Put video listeners into place
+            if(navigator.getUserMedia) { // Standard
+                navigator.getUserMedia(videoObj, function(stream) {
+                    video.src = stream;
+                    video.play();
+                }, errBack);
+            } else if(navigator.webkitGetUserMedia) { // WebKit-prefixed
+                navigator.webkitGetUserMedia(videoObj, function(stream){
+                    video.src = window.webkitURL.createObjectURL(stream);
+                    video.play();
+                }, errBack);
+            }
+        }, false);
+
+        var socketUrl;
+        if (window.location.hostname === 'localhost' || window.location.hostname === '192.168.0.13')  {
+            socketUrl = 'http://192.168.0.13:8000/';
+        }
+        else {
+            socketUrl = 'http://synccams.mybluemix.net/';
+        }
+        socket = io(socketUrl);
+
+        var id;
+
+        var takePicture = function() {
+            context.drawImage(video, 0, 0, 320, 240);
+            console.log("Picture taked!");
+            //socket.emit("sendPicture", {'id' : id , 'picture': context.getImageData(0,0,640,480)});
+            socket.emit("sendPicture", {'id' : id , 'picture': canvas.toDataURL()});
+        };
+
+        $(document).ready(function(){
+
+            socket.on("takePicture", takePicture);
+
+            socket.on("id", function(_id){
+                id = _id;
+                $("#id").text("Camera id: "+id);
+            });
+        });
+    }
+    else {
+        console.log("No user media");
+    }
+
+    function refresh(orientation) {
+
+        console.log();
+
+    }
+
+    function doOnOrientationChange() {
+        switch (window.orientation) {
+          case -90:
+          case 90:
+            refresh('landscape');
+            break;
+          default:
+            refresh('portrait');
+            break;
+        }
+    }
+
+    window.addEventListener('orientationchange', doOnOrientationChange);
+
+    // Initial execution if needed
+    doOnOrientationChange();
+
+    </script>
+</head>
+<body>
+    <video id="video" autoplay></video>
+    <div id="id"></div>
+    <div id='log'>CONSOLA DE LOGS</div>
+    <canvas id="canvas" width="320" height="240"></canvas>
+</body>
+</html>
+
